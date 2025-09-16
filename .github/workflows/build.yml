@@ -193,7 +193,6 @@ jobs:
             cc: cl
             cxx: cl
     steps:
-      ... pasos actuales de Linux/Windows ...
 
   build-android:
     runs-on: ubuntu-latest
