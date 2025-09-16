@@ -180,6 +180,7 @@ jobs:
 
   build-linux-windows:
     runs-on: ${{ matrix.os }}
+    steps:
     strategy:
       matrix:
         include:
