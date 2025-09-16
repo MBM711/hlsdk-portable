@@ -178,7 +178,6 @@ jobs:
           prerelease: true
           name: hlsdk-portable ${{ github.ref_name }} development build
 
-jobs:
   build-linux-windows:
     runs-on: ${{ matrix.os }}
     strategy:
