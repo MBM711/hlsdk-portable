@@ -178,24 +178,18 @@ jobs:
           prerelease: true
           name: hlsdk-portable ${{ github.ref_name }} development build
 
-  build-linux-windows:
-    runs-on: ${{ matrix.os }}
-    steps:
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            cc: gcc
-            cxx: g++
-          - os: ubuntu-latest
-            cc: clang
-            cxx: clang++
-          - os: windows-latest
-            cc: cl
-            cxx: cl 
+name: Build Android APK
 
-  build-android:
+on:
+  push:
+    branches: [ hl_urbicide ]
+  pull_request:
+  workflow_dispatch:  # permite ejecutar manualmente
+
+jobs:
+  build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -208,14 +202,18 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: "platform-tools platforms;android-33 build-tools;33.0.0"
+          packages: |
+            platform-tools
+            platforms;android-33
+            build-tools;33.0.0
+          accept-android-sdk-licenses: true
 
       - name: Build APK
-        working-directory: android  # si tu gradlew está dentro de 'android'
-        run: ./gradlew assembleRelease
+        working-directory: android  # si tu gradlew está en el subdirectorio android
+        run: ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-release.apk
-          path: android/app/build/outputs/apk/release/app-release.apk
+          name: app-debug.apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
