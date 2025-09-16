@@ -178,7 +178,24 @@ jobs:
           prerelease: true
           name: hlsdk-portable ${{ github.ref_name }} development build
 
-      jobs:
+jobs:
+  build-linux-windows:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            cc: gcc
+            cxx: g++
+          - os: ubuntu-latest
+            cc: clang
+            cxx: clang++
+          - os: windows-latest
+            cc: cl
+            cxx: cl
+    steps:
+      ... pasos actuales de Linux/Windows ...
+
   build-android:
     runs-on: ubuntu-latest
     steps:
@@ -193,13 +210,14 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: "platform-tools;build-tools;33.0.0;android-33"
+          packages: "platform-tools platforms;android-33 build-tools;33.0.0"
 
       - name: Build APK
+        working-directory: android  # si tu gradlew está dentro de 'android'
         run: ./gradlew assembleRelease
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release.apk
-          path: app/build/outputs/apk/release/app-release.apk
+          path: android/app/build/outputs/apk/release/app-release.apk
