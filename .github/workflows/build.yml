@@ -71,7 +71,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: hlsdk-${{ steps.extract_branch.outputs.branch }}-linux
-        path: dist/${{ steps.extract_gamedir.outputs.gamedir }}
+        path: build
   
   release:
     name: Release
