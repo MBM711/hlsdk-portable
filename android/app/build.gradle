@@ -6,10 +6,10 @@ apply plugin: 'com.android.application'
 
 android {
     ndkVersion '26.1.10909125'
-    namespace 'com.example.hlsdk'
+    namespace 'io.github.mbm711.urbi'
 
     defaultConfig {
-        applicationId 'com.example.hlsdk'
+        applicationId 'io.github.mdm711.urbi'
         versionName '1.0'
         versionCode getBuildNum()
         minSdkVersion 3
