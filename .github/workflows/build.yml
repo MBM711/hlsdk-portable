@@ -11,12 +11,7 @@ jobs:
           - os: ubuntu-latest
             cc: gcc
             cxx: g++
-          - os: ubuntu-latest
-            cc: clang
-            cxx: clang++
-          - os: windows-latest
-            cc: cl
-            cxx: cl
+      
     env:
       CC: ${{ matrix.cc }}
       CXX: ${{ matrix.cxx }}
@@ -27,74 +22,42 @@ jobs:
       with:
         submodules: recursive
 
-    - name: Checkout steam-runtime
-      if: startsWith(matrix.os, 'ubuntu')
-      uses: actions/checkout@v4
-      with:
-        repository: ValveSoftware/steam-runtime
-        path: steam-runtime
-    - name: Cache steam-runtime
-      if: startsWith(matrix.os, 'ubuntu')
-      id: cache-steam-runtime
-      uses: actions/cache@v4
-      with:
-        path: com.valvesoftware.SteamRuntime.Sdk-i386-scout-sysroot.tar.gz
-        key: steam-runtime-${{ env.STEAMRT_SNAPSHOT }}
-    - name: Download steam-runtime
-      if: startsWith(matrix.os, 'ubuntu') && steps.cache-steam-runtime.outputs.cache-hit != 'true'
-      run: wget --no-verbose https://repo.steampowered.com/steamrt-images-scout/snapshots/${{ env.STEAMRT_SNAPSHOT }}/com.valvesoftware.SteamRuntime.Sdk-i386-scout-sysroot.tar.gz
-    - name: Install steam runtime
-      if: startsWith(matrix.os, 'ubuntu')
+    - name: Install Android dependencies
       run: |
-        sudo apt update
-        ./steam-runtime/setup_chroot.sh --i386 --tarball ./com.valvesoftware.SteamRuntime.Sdk-i386-scout-sysroot.tar.gz
-        sudo sed -i 's/groups=sudo/groups=adm/g' /etc/schroot/chroot.d/steamrt_scout_i386.conf
+        # worst way to embed a shell script
+        cd $GITHUB_WORKSPACE
+        
+        export ANDROID_COMMANDLINE_TOOLS_VER="13114758"
+        export ANDROID_BUILD_TOOLS_VER="36.0.0"
+        export ANDROID_PLATFORM_VER="android-35"
+        export ANDROID_NDK_VERSION="28.2.13676358"
+        
+        echo "Download JDK 17"
+        wget https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.15%2B6/OpenJDK17U-jdk_x64_linux_hotspot_17.0.15_6.tar.gz -qO- | tar -xzf - || exit 1
+        export JAVA_HOME=$GITHUB_WORKSPACE/jdk-17.0.15+6
+        export PATH=$PATH:$JAVA_HOME/bin
+        
 
-    - name: Build on Linux
-      if: startsWith(matrix.os, 'ubuntu')
+        echo "Download Android SDK"
+        mkdir -p sdk || exit 1
+        pushd sdk
+        wget https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_COMMANDLINE_TOOLS_VER}_latest.zip -qO sdk.zip || exit 1
+        unzip -q sdk.zip || exit 1
+        mv cmdline-tools tools
+        mkdir -p cmdline-tools
+        mv tools cmdline-tools/tools
+        unset ANDROID_SDK_ROOT
+        export ANDROID_HOME=$GITHUB_WORKSPACE/sdk
+        export PATH=$PATH:$ANDROID_HOME/tools:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/tools/bin
+        popd
+        
+        echo "Download all needed tools and Android NDK"
+        yes | sdkmanager --licenses > /dev/null 2>/dev/null # who even reads licenses? :)
+        sdkmanager --install build-tools\;${ANDROID_BUILD_TOOLS_VER} platform-tools platforms\;${ANDROID_PLATFORM_VER} ndk\;${ANDROID_NDK_VERSION}
+    - name: Build for Android
       run: |
-        schroot --chroot steamrt_scout_i386 -- cmake -GNinja -DCMAKE_BUILD_TYPE=Release -DPOLLY=ON -B build -S . -DCMAKE_EXE_LINKER_FLAGS="-Wl,--no-undefined" -DCMAKE_INSTALL_PREFIX="$PWD/dist"
-        schroot --chroot steamrt_scout_i386 -- cmake --build build --target all
-        schroot --chroot steamrt_scout_i386 -- cmake --build build --target install
-    - name: Build on Linux with vgui
-      if: startsWith(matrix.os, 'ubuntu') && startsWith(matrix.cc, 'gcc')
-      run: |
-        schroot --chroot steamrt_scout_i386 -- cmake -GNinja -DCMAKE_BUILD_TYPE=Release -DPOLLY=ON -B build-vgui -S . -DCMAKE_EXE_LINKER_FLAGS="-Wl,--no-undefined" -DUSE_VGUI=ON -DCMAKE_INSTALL_PREFIX="$PWD/dist-vgui"
-        cp vgui_support/vgui-dev/lib/vgui.so build-vgui/cl_dll
-        cp vgui_support/vgui-dev/lib/vgui.so build-vgui
-        schroot --chroot steamrt_scout_i386 -- cmake --build build-vgui --target all
-        schroot --chroot steamrt_scout_i386 -- cmake --build build-vgui --target install
-
-    - name: Set developer command prompt for Windows x86
-      if: startsWith(matrix.os, 'windows')
-      uses: ilammy/msvc-dev-cmd@v1
-      with:
-        arch: x86
-
-    - name: Build on Windows
-      if: startsWith(matrix.os, 'windows')
-      run: |
-        cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -B build -S . -DCMAKE_INSTALL_PREFIX="dist"
-        cmake --build build --target all
-        cmake --build build --target install
-    - name: Build on Windows with vgui
-      if: startsWith(matrix.os, 'windows')
-      run: |
-        cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -B build -S . -DUSE_VGUI=ON -DCMAKE_INSTALL_PREFIX="dist-vgui"
-        cmake --build build --target all
-        cmake --build build --target install
-
-    - name: Set developer command prompt for Windows x86_64
-      if: startsWith(matrix.os, 'windows')
-      uses: ilammy/msvc-dev-cmd@v1
-      with:
-        arch: x64
-    - name: Build on Windows x64
-      if: startsWith(matrix.os, 'windows')
-      run: |
-        cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -B build64 -S . -DCMAKE_INSTALL_PREFIX="dist64" -D64BIT=ON
-        cmake --build build64 --target all
-        cmake --build build64 --target install
+        cd android
+        ./gradlew assembleRelease
 
     - name: Extract branch name
       shell: bash
@@ -105,36 +68,11 @@ jobs:
       run: echo "gamedir=$(grep build/CMakeCache.txt -Ee 'GAMEDIR:STRING=[a-z]+' | cut -d '=' -f 2)" >> $GITHUB_OUTPUT
       id: extract_gamedir
     - name: Upload linux artifact
-      if: startsWith(matrix.os, 'ubuntu') && matrix.cc == 'gcc'
       uses: actions/upload-artifact@v4
       with:
         name: hlsdk-${{ steps.extract_branch.outputs.branch }}-linux
-        path: dist/${{ steps.extract_gamedir.outputs.gamedir }}
-    - name: Upload linux artifact with vgui
-      if: startsWith(matrix.os, 'ubuntu') && matrix.cc == 'gcc'
-      uses: actions/upload-artifact@v4
-      with:
-        name: hlsdk-${{ steps.extract_branch.outputs.branch }}-linux-vgui
-        path: dist-vgui/${{ steps.extract_gamedir.outputs.gamedir }}
-    - name: Upload windows artifact
-      if: startsWith(matrix.os, 'windows')
-      uses: actions/upload-artifact@v4
-      with:
-        name: hlsdk-${{ steps.extract_branch.outputs.branch }}-windows
-        path: dist/${{ steps.extract_gamedir.outputs.gamedir }}
-    - name: Upload windows x64 artifact
-      if: startsWith(matrix.os, 'windows')
-      uses: actions/upload-artifact@v4
-      with:
-        name: hlsdk-${{ steps.extract_branch.outputs.branch }}-windows_x64
-        path: dist64/${{ steps.extract_gamedir.outputs.gamedir }}
-    - name: Upload windows artifact with vgui
-      if: startsWith(matrix.os, 'windows')
-      uses: actions/upload-artifact@v4
-      with:
-        name: hlsdk-${{ steps.extract_branch.outputs.branch }}-windows-vgui
-        path: dist-vgui/${{ steps.extract_gamedir.outputs.gamedir }}
-
+        path: ./android/app/build/outputs/apk/release/app-release-unsigned.apk
+  
   release:
     name: Release
     runs-on: ubuntu-latest
@@ -177,3 +115,43 @@ jobs:
           draft: false
           prerelease: true
           name: hlsdk-portable ${{ github.ref_name }} development build
+
+name: Build Android APK
+
+on:
+  push:
+    branches: [ decay ]
+  pull_request:
+  workflow_dispatch:  # permite ejecutar manualmente
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platform-tools
+            platforms;android-33
+            build-tools;33.0.0
+          accept-android-sdk-licenses: true
+
+      - name: Build APK
+        working-directory: android  # si tu gradlew está en el subdirectorio android
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug.apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
