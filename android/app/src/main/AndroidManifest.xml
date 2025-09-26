@@ -5,7 +5,7 @@
     <application
         android:forceQueryable="true"
         android:icon="@android:mipmap/sym_def_app_icon"
-        android:label="hlsdk-portable"
+        android:label="echo-portable"
         tools:targetApi="r">
 
         <meta-data
